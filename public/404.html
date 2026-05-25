@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Growyard</title>
+    <script>
+      // GitHub Pages SPA shim — stash the requested path, redirect to root,
+      // and let index.html restore it via history.replaceState.
+      sessionStorage.setItem('spa-redirect', location.pathname + location.search + location.hash);
+      var base = "/growyard/"; // build-time base path; matches vite.config base when deployed
+      location.replace(base);
+    </script>
+  </head>
+  <body></body>
+</html>

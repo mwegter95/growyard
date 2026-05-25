@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- GitHub Pages SPA: restore path encoded by 404.html -->
+    <script>
+      (function(){
+        var r = sessionStorage.getItem('spa-redirect');
+        if (r) { sessionStorage.removeItem('spa-redirect'); window.history.replaceState(null,null,r); }
+      })();
+    </script>
+    <meta name="description" content="Growyard — per-yard plant database and a month-by-month maintenance calendar." />
+    <meta name="theme-color" content="#4F6F44" />
+    <title>Growyard — Yard Almanac</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23F4F0E6'/><text x='50%25' y='62%25' dominant-baseline='middle' text-anchor='middle' font-family='serif' font-size='22' fill='%234F6F44'>🌱</text></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
