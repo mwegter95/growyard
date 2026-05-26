@@ -90,6 +90,19 @@ export default function YardApp({ user, onLogout }) {
     return () => { active = false }
   }, [selectedPlant])
 
+  // Lazily load the plant hero when a task modal opens (same image, different entry point).
+  useEffect(() => {
+    const plantId = selectedTask?.plantId
+    if (!plantId) return
+    if (imgCache[plantId]?.hero) return  // already cached
+    let active = true
+    fetchPlantHero(plantId).then(url => {
+      if (active && url)
+        setImgCache(prev => ({ ...prev, [plantId]: { ...prev[plantId], hero: url } }))
+    })
+    return () => { active = false }
+  }, [selectedTask])
+
   const toggleComplete = async (taskId) => {
     const key = `${taskId}:${year}`
     const next = !completed[key]
@@ -212,6 +225,7 @@ export default function YardApp({ user, onLogout }) {
           task={selectedTask}
           plant={plants.find(p => p.id === selectedTask.plantId)}
           plantThumbUrl={selectedTask.plantId ? getThumb(imgCache, selectedTask.plantId) : null}
+          plantHeroUrl={selectedTask.plantId ? getHero(imgCache, selectedTask.plantId) : null}
           onClose={() => setSelectedTask(null)}
           isComplete={isComplete(selectedTask.id)}
           toggleComplete={() => toggleComplete(selectedTask.id)}
@@ -429,7 +443,7 @@ function PlantsView({ plants, imgCache, onPlantClick, tasksForPlant, searchQuery
   )
 }
 
-function TaskModal({ task, plant, plantThumbUrl, onClose, isComplete, toggleComplete, note, saveNote }) {
+function TaskModal({ task, plant, plantThumbUrl, plantHeroUrl, onClose, isComplete, toggleComplete, note, saveNote }) {
   const Icon = CATEGORY_ICONS[task.category] || Leaf
   const color = CATEGORY_COLORS[task.category]
   const [localNote, setLocalNote] = useState(note)
@@ -462,6 +476,10 @@ function TaskModal({ task, plant, plantThumbUrl, onClose, isComplete, toggleComp
             )}
             <span>{plant.common}</span>
           </div>
+        )}
+
+        {plantHeroUrl && (
+          <img src={plantHeroUrl} alt={plant?.common} style={styles.plantHero} />
         )}
 
         <button
@@ -791,7 +809,7 @@ const styles = {
     border: '1px solid rgba(92, 110, 88, 0.20)',
   },
   plantHero: {
-    width: '100%', height: 220, objectFit: 'cover',
+    width: '100%', aspectRatio: '4/3', objectFit: 'cover',
     borderRadius: 14, marginBottom: 16,
     border: '1px solid rgba(92, 110, 88, 0.15)',
     backgroundColor: 'rgba(92, 110, 88, 0.06)',
