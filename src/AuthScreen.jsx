@@ -31,7 +31,7 @@ export default function AuthScreen({ onAuthed }) {
       <div style={s.card}>
         <div style={s.brand}>
           <Leaf size={22} color="#4F6F44" strokeWidth={1.5} />
-          <span style={s.brandText}>The Yard Almanac</span>
+          <span style={s.brandText}>Growyard</span>
         </div>
         <h1 style={s.title}>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
         <p style={s.subtitle}>

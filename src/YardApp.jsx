@@ -26,6 +26,12 @@ const CATEGORY_COLORS = {
   remove: '#B0413E',
 }
 
+// Build a public URL for a per-plant image. Files live in growyard/public/plants/
+// and Vite serves them at `${BASE_URL}plants/<filename>` — `/` in dev,
+// `/growyard/` in production (set via VITE_BASE in deploy.yml).
+const plantImg = (filename) =>
+  filename ? `${import.meta.env.BASE_URL}plants/${filename}` : null
+
 export default function YardApp({ user, onLogout }) {
   const [view, setView] = useState('calendar')
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
@@ -118,7 +124,7 @@ export default function YardApp({ user, onLogout }) {
           <div>
             <div style={styles.brand}>
               <Leaf size={20} color="#4F6F44" strokeWidth={1.5} />
-              <span style={styles.brandText}>The Yard Almanac</span>
+              <span style={styles.brandText}>Growyard</span>
             </div>
             <div style={styles.subBrand}>
               {user?.display_name ? `${user.display_name} · ` : ''}Zone 4b
@@ -153,6 +159,7 @@ export default function YardApp({ user, onLogout }) {
             selectedMonth={selectedMonth}
             setSelectedMonth={setSelectedMonth}
             tasks={tasksThisMonth}
+            plants={plants}
             onTaskClick={setSelectedTask}
             isComplete={isComplete}
             toggleComplete={toggleComplete}
@@ -197,7 +204,11 @@ export default function YardApp({ user, onLogout }) {
   )
 }
 
-function CalendarView({ allTasks, selectedMonth, setSelectedMonth, tasks, onTaskClick, isComplete, toggleComplete, completedCount, totalCount, searchQuery, setSearchQuery }) {
+function CalendarView({ allTasks, selectedMonth, setSelectedMonth, tasks, plants, onTaskClick, isComplete, toggleComplete, completedCount, totalCount, searchQuery, setSearchQuery }) {
+  const plantsById = useMemo(
+    () => Object.fromEntries((plants || []).map(p => [p.id, p])),
+    [plants]
+  )
   return (
     <>
       <div data-month-strip style={styles.monthStrip}>
@@ -263,6 +274,7 @@ function CalendarView({ allTasks, selectedMonth, setSelectedMonth, tasks, onTask
             <TaskCard
               key={t.id}
               task={t}
+              plant={t.plantId ? plantsById[t.plantId] : null}
               isComplete={isComplete(t.id)}
               toggleComplete={() => toggleComplete(t.id)}
               onClick={() => onTaskClick(t)}
@@ -274,9 +286,10 @@ function CalendarView({ allTasks, selectedMonth, setSelectedMonth, tasks, onTask
   )
 }
 
-function TaskCard({ task, isComplete, toggleComplete, onClick }) {
+function TaskCard({ task, plant, isComplete, toggleComplete, onClick }) {
   const Icon = CATEGORY_ICONS[task.category] || Leaf
   const color = CATEGORY_COLORS[task.category]
+  const thumbUrl = plant ? plantImg(plant.thumb || plant.image) : null
   return (
     <div style={{ ...styles.taskCard, ...(isComplete ? styles.taskCardComplete : {}) }} onClick={onClick}>
       <button
@@ -290,6 +303,14 @@ function TaskCard({ task, isComplete, toggleComplete, onClick }) {
       >
         {isComplete && <Check size={14} color="#fff" strokeWidth={3} />}
       </button>
+      {thumbUrl && (
+        <img
+          src={thumbUrl}
+          alt={plant.common}
+          style={{ ...styles.taskThumb, ...(isComplete ? { opacity: 0.55 } : {}) }}
+          loading="lazy"
+        />
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={styles.taskCategoryRow}>
           <Icon size={11} color={color} strokeWidth={2} />
@@ -334,28 +355,41 @@ function PlantsView({ plants, onPlantClick, tasksForPlant, searchQuery, setSearc
         {filtered.map(p => {
           const taskCount = tasksForPlant(p.id).length
           const isInvasive = p.tags?.includes('invasive')
+          const thumbUrl = plantImg(p.thumb || p.image)
           return (
             <div
               key={p.id}
               style={{ ...styles.plantCard, ...(isInvasive ? styles.plantCardInvasive : {}) }}
               onClick={() => onPlantClick(p)}
             >
-              <div style={styles.plantCardHeader}>
-                <div>
-                  <div style={styles.plantCommon}>{p.common}</div>
-                  <div style={styles.plantLatin}>{p.latin}</div>
-                </div>
-                <ChevronRight size={16} color="#a8a397" />
-              </div>
-              <div style={styles.plantMeta}>
-                <span style={styles.plantMetaItem}>
-                  <Sun size={10} /> {p.sun}
-                </span>
-                {taskCount > 0 && (
-                  <span style={styles.plantMetaItem}>
-                    {taskCount} {taskCount === 1 ? 'task' : 'tasks'}
-                  </span>
+              <div style={styles.plantCardBody}>
+                {thumbUrl && (
+                  <img
+                    src={thumbUrl}
+                    alt={p.common}
+                    style={styles.plantCardThumb}
+                    loading="lazy"
+                  />
                 )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={styles.plantCardHeader}>
+                    <div>
+                      <div style={styles.plantCommon}>{p.common}</div>
+                      <div style={styles.plantLatin}>{p.latin}</div>
+                    </div>
+                    <ChevronRight size={16} color="#a8a397" />
+                  </div>
+                  <div style={styles.plantMeta}>
+                    <span style={styles.plantMetaItem}>
+                      <Sun size={10} /> {p.sun}
+                    </span>
+                    {taskCount > 0 && (
+                      <span style={styles.plantMetaItem}>
+                        {taskCount} {taskCount === 1 ? 'task' : 'tasks'}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )
@@ -391,7 +425,15 @@ function TaskModal({ task, plant, onClose, isComplete, toggleComplete, note, sav
 
         {plant && (
           <div style={styles.plantTag}>
-            <Leaf size={11} color="#4F6F44" />
+            {plant.thumb || plant.image ? (
+              <img
+                src={plantImg(plant.thumb || plant.image)}
+                alt={plant.common}
+                style={styles.plantTagAvatar}
+              />
+            ) : (
+              <Leaf size={11} color="#4F6F44" />
+            )}
             <span>{plant.common}</span>
           </div>
         )}
@@ -441,6 +483,7 @@ function Section({ title, icon, children }) {
 
 function PlantModal({ plant, tasks, onClose, onTaskClick, isComplete }) {
   const isInvasive = plant.tags?.includes('invasive')
+  const heroUrl = plantImg(plant.image)
   return (
     <div style={styles.modalOverlay} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -460,6 +503,14 @@ function PlantModal({ plant, tasks, onClose, onTaskClick, isComplete }) {
             <X size={18} color="#5C6E58" />
           </button>
         </div>
+
+        {heroUrl && (
+          <img
+            src={heroUrl}
+            alt={plant.common}
+            style={styles.plantHero}
+          />
+        )}
 
         <h1 style={styles.modalTitle}>{plant.common}</h1>
         <div style={{ ...styles.plantLatin, marginBottom: 16 }}>{plant.latin}</div>
@@ -616,6 +667,12 @@ const styles = {
     cursor: 'pointer', transition: 'all 0.2s',
   },
   taskCardComplete: { backgroundColor: 'rgba(255, 255, 255, 0.4)' },
+  taskThumb: {
+    width: 38, height: 38, borderRadius: 10, objectFit: 'cover',
+    flexShrink: 0,
+    border: '1px solid rgba(92, 110, 88, 0.18)',
+    backgroundColor: 'rgba(92, 110, 88, 0.06)',
+  },
   checkBox: {
     width: 22, height: 22, minWidth: 22, borderRadius: 7,
     border: '1.5px solid', display: 'flex', alignItems: 'center',
@@ -645,6 +702,13 @@ const styles = {
   plantCardInvasive: {
     borderColor: 'rgba(176, 65, 62, 0.25)',
     backgroundColor: 'rgba(176, 65, 62, 0.04)',
+  },
+  plantCardBody: { display: 'flex', alignItems: 'center', gap: 12 },
+  plantCardThumb: {
+    width: 60, height: 60, borderRadius: 12, objectFit: 'cover',
+    flexShrink: 0,
+    border: '1px solid rgba(92, 110, 88, 0.18)',
+    backgroundColor: 'rgba(92, 110, 88, 0.06)',
   },
   plantCardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   plantCommon: {
@@ -693,9 +757,20 @@ const styles = {
     lineHeight: 1.15, margin: 0, marginBottom: 8,
   },
   plantTag: {
-    display: 'inline-flex', alignItems: 'center', gap: 5,
+    display: 'inline-flex', alignItems: 'center', gap: 6,
     fontFamily: "'Inter', sans-serif", fontSize: 12,
     color: '#4F6F44', fontWeight: 500, marginBottom: 14,
+  },
+  plantTagAvatar: {
+    width: 22, height: 22, borderRadius: '50%', objectFit: 'cover',
+    border: '1px solid rgba(92, 110, 88, 0.20)',
+  },
+  plantHero: {
+    width: '100%', height: 220, objectFit: 'cover',
+    borderRadius: 14, marginBottom: 16,
+    border: '1px solid rgba(92, 110, 88, 0.15)',
+    backgroundColor: 'rgba(92, 110, 88, 0.06)',
+    display: 'block',
   },
   completeBtn: {
     width: '100%', padding: '12px 16px', borderRadius: 12,

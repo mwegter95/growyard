@@ -3,3 +3,6 @@ dist
 .DS_Store
 .env.local
 *.log
+
+# Raw source yard photos — only the cropped derivatives under public/plants/ ship
+yardpics/
