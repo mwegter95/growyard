@@ -3,7 +3,7 @@ import {
   Check, ChevronRight, Calendar, Leaf, X, Search, AlertTriangle,
   Droplet, Scissors, Sprout, Snowflake, Sun, CloudRain, Info, LogOut,
 } from 'lucide-react'
-import { fetchYardState, putProgress } from './api.js'
+import { fetchYardState, putProgress, fetchPlantThumb, fetchPlantHero } from './api.js'
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -26,11 +26,11 @@ const CATEGORY_COLORS = {
   remove: '#B0413E',
 }
 
-// Build a public URL for a per-plant image. Files live in growyard/public/plants/
-// and Vite serves them at `${BASE_URL}plants/<filename>` — `/` in dev,
-// `/growyard/` in production (set via VITE_BASE in deploy.yml).
-const plantImg = (filename) =>
-  filename ? `${import.meta.env.BASE_URL}plants/${filename}` : null
+// plantImgCache is a per-render-tree object: { [plantId]: { thumb?: blobUrl, hero?: blobUrl } }
+// Blob URLs are created by fetchPlantThumb / fetchPlantHero in api.js (auth-gated API).
+// We expose a tiny helper so call sites stay readable.
+const getThumb = (cache, plantId) => cache[plantId]?.thumb ?? null
+const getHero  = (cache, plantId) => cache[plantId]?.hero  ?? null
 
 export default function YardApp({ user, onLogout }) {
   const [view, setView] = useState('calendar')
@@ -45,6 +45,7 @@ export default function YardApp({ user, onLogout }) {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [imgCache, setImgCache] = useState({})
 
   useEffect(() => {
     let active = true
@@ -63,6 +64,31 @@ export default function YardApp({ user, onLogout }) {
       .finally(() => active && setLoading(false))
     return () => { active = false }
   }, [])
+
+  // Eagerly load all thumbnails once plants are available.
+  useEffect(() => {
+    if (!plants.length) return
+    let active = true
+    plants.forEach(p => {
+      fetchPlantThumb(p.id).then(url => {
+        if (active && url)
+          setImgCache(prev => ({ ...prev, [p.id]: { ...prev[p.id], thumb: url } }))
+      })
+    })
+    return () => { active = false }
+  }, [plants])
+
+  // Lazily load the hero when a plant modal opens.
+  useEffect(() => {
+    if (!selectedPlant) return
+    if (imgCache[selectedPlant.id]?.hero) return  // already fetched
+    let active = true
+    fetchPlantHero(selectedPlant.id).then(url => {
+      if (active && url)
+        setImgCache(prev => ({ ...prev, [selectedPlant.id]: { ...prev[selectedPlant.id], hero: url } }))
+    })
+    return () => { active = false }
+  }, [selectedPlant])
 
   const toggleComplete = async (taskId) => {
     const key = `${taskId}:${year}`
@@ -160,6 +186,7 @@ export default function YardApp({ user, onLogout }) {
             setSelectedMonth={setSelectedMonth}
             tasks={tasksThisMonth}
             plants={plants}
+            imgCache={imgCache}
             onTaskClick={setSelectedTask}
             isComplete={isComplete}
             toggleComplete={toggleComplete}
@@ -171,6 +198,7 @@ export default function YardApp({ user, onLogout }) {
         ) : (
           <PlantsView
             plants={plants}
+            imgCache={imgCache}
             onPlantClick={setSelectedPlant}
             tasksForPlant={tasksForPlant}
             searchQuery={searchQuery}
@@ -183,6 +211,7 @@ export default function YardApp({ user, onLogout }) {
         <TaskModal
           task={selectedTask}
           plant={plants.find(p => p.id === selectedTask.plantId)}
+          plantThumbUrl={selectedTask.plantId ? getThumb(imgCache, selectedTask.plantId) : null}
           onClose={() => setSelectedTask(null)}
           isComplete={isComplete(selectedTask.id)}
           toggleComplete={() => toggleComplete(selectedTask.id)}
@@ -194,6 +223,7 @@ export default function YardApp({ user, onLogout }) {
       {selectedPlant && (
         <PlantModal
           plant={selectedPlant}
+          heroUrl={getHero(imgCache, selectedPlant.id)}
           tasks={tasksForPlant(selectedPlant.id)}
           onClose={() => setSelectedPlant(null)}
           onTaskClick={(t) => { setSelectedPlant(null); setSelectedTask(t) }}
@@ -204,7 +234,7 @@ export default function YardApp({ user, onLogout }) {
   )
 }
 
-function CalendarView({ allTasks, selectedMonth, setSelectedMonth, tasks, plants, onTaskClick, isComplete, toggleComplete, completedCount, totalCount, searchQuery, setSearchQuery }) {
+function CalendarView({ allTasks, selectedMonth, setSelectedMonth, tasks, plants, imgCache, onTaskClick, isComplete, toggleComplete, completedCount, totalCount, searchQuery, setSearchQuery }) {
   const plantsById = useMemo(
     () => Object.fromEntries((plants || []).map(p => [p.id, p])),
     [plants]
@@ -275,6 +305,7 @@ function CalendarView({ allTasks, selectedMonth, setSelectedMonth, tasks, plants
               key={t.id}
               task={t}
               plant={t.plantId ? plantsById[t.plantId] : null}
+              thumbUrl={t.plantId ? getThumb(imgCache, t.plantId) : null}
               isComplete={isComplete(t.id)}
               toggleComplete={() => toggleComplete(t.id)}
               onClick={() => onTaskClick(t)}
@@ -286,10 +317,9 @@ function CalendarView({ allTasks, selectedMonth, setSelectedMonth, tasks, plants
   )
 }
 
-function TaskCard({ task, plant, isComplete, toggleComplete, onClick }) {
+function TaskCard({ task, plant, thumbUrl, isComplete, toggleComplete, onClick }) {
   const Icon = CATEGORY_ICONS[task.category] || Leaf
   const color = CATEGORY_COLORS[task.category]
-  const thumbUrl = plant ? plantImg(plant.thumb || plant.image) : null
   return (
     <div style={{ ...styles.taskCard, ...(isComplete ? styles.taskCardComplete : {}) }} onClick={onClick}>
       <button
@@ -326,7 +356,7 @@ function TaskCard({ task, plant, isComplete, toggleComplete, onClick }) {
   )
 }
 
-function PlantsView({ plants, onPlantClick, tasksForPlant, searchQuery, setSearchQuery }) {
+function PlantsView({ plants, imgCache, onPlantClick, tasksForPlant, searchQuery, setSearchQuery }) {
   const filtered = plants.filter(p =>
     !searchQuery
     || p.common.toLowerCase().includes(searchQuery.toLowerCase())
@@ -355,7 +385,7 @@ function PlantsView({ plants, onPlantClick, tasksForPlant, searchQuery, setSearc
         {filtered.map(p => {
           const taskCount = tasksForPlant(p.id).length
           const isInvasive = p.tags?.includes('invasive')
-          const thumbUrl = plantImg(p.thumb || p.image)
+          const thumbUrl = getThumb(imgCache, p.id)
           return (
             <div
               key={p.id}
@@ -399,7 +429,7 @@ function PlantsView({ plants, onPlantClick, tasksForPlant, searchQuery, setSearc
   )
 }
 
-function TaskModal({ task, plant, onClose, isComplete, toggleComplete, note, saveNote }) {
+function TaskModal({ task, plant, plantThumbUrl, onClose, isComplete, toggleComplete, note, saveNote }) {
   const Icon = CATEGORY_ICONS[task.category] || Leaf
   const color = CATEGORY_COLORS[task.category]
   const [localNote, setLocalNote] = useState(note)
@@ -425,12 +455,8 @@ function TaskModal({ task, plant, onClose, isComplete, toggleComplete, note, sav
 
         {plant && (
           <div style={styles.plantTag}>
-            {plant.thumb || plant.image ? (
-              <img
-                src={plantImg(plant.thumb || plant.image)}
-                alt={plant.common}
-                style={styles.plantTagAvatar}
-              />
+            {plantThumbUrl ? (
+              <img src={plantThumbUrl} alt={plant.common} style={styles.plantTagAvatar} />
             ) : (
               <Leaf size={11} color="#4F6F44" />
             )}
@@ -481,9 +507,8 @@ function Section({ title, icon, children }) {
   )
 }
 
-function PlantModal({ plant, tasks, onClose, onTaskClick, isComplete }) {
+function PlantModal({ plant, heroUrl, tasks, onClose, onTaskClick, isComplete }) {
   const isInvasive = plant.tags?.includes('invasive')
-  const heroUrl = plantImg(plant.image)
   return (
     <div style={styles.modalOverlay} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>

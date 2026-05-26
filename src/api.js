@@ -69,3 +69,23 @@ export async function fetchYardState(year) {
 export async function putProgress(taskId, patch) {
   return request(`/yard/progress/${encodeURIComponent(taskId)}`, { method: 'PUT', body: patch })
 }
+
+// Fetch a plant image from the API and return a local blob URL for use in <img>.
+// The backend serves each user's own copy, so photos are truly per-user.
+async function fetchPlantImageBlob(path) {
+  const tok = getToken()
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: tok ? { 'Authorization': `Bearer ${tok}` } : {},
+  })
+  if (!res.ok) return null
+  const blob = await res.blob()
+  return URL.createObjectURL(blob)
+}
+
+export function fetchPlantThumb(plantId) {
+  return fetchPlantImageBlob(`/yard/plants/${encodeURIComponent(plantId)}/thumb`)
+}
+
+export function fetchPlantHero(plantId) {
+  return fetchPlantImageBlob(`/yard/plants/${encodeURIComponent(plantId)}/image`)
+}
