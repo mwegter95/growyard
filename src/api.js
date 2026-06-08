@@ -1,8 +1,10 @@
 // API wrapper for talking to mw-backend.
 // Token lives in localStorage; every request sends it as Authorization: Bearer.
 
+import { syncTokenToParent } from './embedAuth.js'
+
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.michaelwegter.com'
-const TOKEN_KEY = 'growyard:token'
+export const TOKEN_KEY = 'growyard:token'
 const USER_KEY = 'growyard:user'
 
 export function getToken() {
@@ -16,11 +18,15 @@ export function getStoredUser() {
 function persistSession({ token, user }) {
   if (token) localStorage.setItem(TOKEN_KEY, token)
   if (user) localStorage.setItem(USER_KEY, JSON.stringify(user))
+  // Mirror to the first-party parent shell so an embedded session survives
+  // Safari evicting this iframe's third-party storage. No-op when not embedded.
+  if (token) syncTokenToParent(token)
 }
 
 export function clearSession() {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
+  syncTokenToParent(null)
 }
 
 async function request(path, { method = 'GET', body, auth = true } = {}) {

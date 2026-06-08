@@ -2,6 +2,13 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './styles.css'
+import { hydrateTokenFromParent } from './embedAuth.js'
+import { TOKEN_KEY } from './api.js'
+
+/* Recover the login token from the first-party parent shell if Safari evicted
+ * this iframe's third-party storage — keeps the user signed in for the token's
+ * full 7-day life instead of getting logged out every day or two. */
+hydrateTokenFromParent(TOKEN_KEY)
 
 /* ── Embed-mode height broadcaster ──────────────────────────────────────────
  * When Growyard is iframed (e.g. inside michaelwegter.com/apps/growyard),
